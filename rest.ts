@@ -321,17 +321,19 @@ function routeRepoSub(
       const contentB64 = str(input.content);
       if (contentB64 === '') return err(422, 'content is required');
       const content = Buffer.from(contentB64.replace(/[\r\n\t ]+/g, ''), 'base64');
+      const branchName = typeof input.branch === 'string' ? input.branch : undefined;
+      const tipBefore = store.branchTip(repo, branchName ?? repo.defaultBranch);
+      const existedBefore = tipBefore !== undefined && store.readPath(repo, tipBefore, path)?.kind === 'file';
       const result = store.putContent(
         repo,
         path,
         content,
         str(input.message, 'Update'),
-        typeof input.branch === 'string' ? input.branch : undefined,
+        branchName,
         typeof input.sha === 'string' ? input.sha : undefined,
       );
       if ('error' in result) return err(result.status, result.error);
-      const created = store.branchTip(repo, typeof input.branch === 'string' ? input.branch : repo.defaultBranch) !== undefined;
-      return json(created ? 200 : 201, {
+      return json(existedBefore ? 200 : 201, {
         content: { name: path.split('/').pop() ?? path, path, sha: result.contentSha, size: content.length, encoding: 'base64', type: 'file' },
         commit: { sha: result.commitSha, message: str(input.message, 'Update') },
       });

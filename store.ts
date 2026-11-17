@@ -380,7 +380,10 @@ export class Store {
       const object = repo.objects.get(oid);
       if (!object || object.type !== 'commit') continue;
       const info = parseCommit(object.data);
-      out.push({ sha: oid, message: info.message, author: info.author, committer: info.committer });
+      // The stored commit object ends the message with a newline (git convention); the
+      // REST view returns the message as it was given, without that trailing newline.
+      const message = info.message.endsWith('\n') ? info.message.slice(0, -1) : info.message;
+      out.push({ sha: oid, message, author: info.author, committer: info.committer });
       for (const parent of info.parents) queue.push(parent);
     }
     return out;

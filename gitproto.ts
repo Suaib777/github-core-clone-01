@@ -125,7 +125,7 @@ export function infoRefs(
     return { status: 404, contentType: 'application/json; charset=utf-8', body: Buffer.from(JSON.stringify({ message: 'Not Found' }) + '\n') };
   }
   if (service === 'git-upload-pack') {
-    if (gitProtocol === '2') {
+    if (gitProtocol === 'version=2') {
       return { status: 200, contentType: 'application/x-git-upload-pack-advertisement', body: v2Advertisement('git-upload-pack') };
     }
     return { status: 200, contentType: 'application/x-git-upload-pack-advertisement', body: v0Advertisement(repo, 'git-upload-pack') };
@@ -557,7 +557,7 @@ export function uploadPack(
   } catch {
     return { status: 400, contentType: 'application/json; charset=utf-8', body: Buffer.from(JSON.stringify({ message: 'malformed pkt-line' }) + '\n') };
   }
-  if (gitProtocol === '2') {
+  if (gitProtocol === 'version=2') {
     const first = packets.find((packet) => packet.kind === 'data');
     const command = first ? first.payload.toString('utf8').replace(/\n$/, '') : '';
     if (command === 'command=ls-refs') {

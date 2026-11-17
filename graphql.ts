@@ -574,7 +574,11 @@ function resolveField(
       const direction = orderBy?.direction === 'ASC' ? 1 : -1;
       issues.sort((a, b) => (a.number - b.number) * direction);
       const afterNumber = numberAfterCursor(typeof after === 'string' ? after : null);
-      if (afterNumber !== null) issues = issues.filter((issue) => issue.number > afterNumber);
+      // The cursor marks the last node of the previous page; the next page continues in
+      // the same direction: below the cursor when descending, above it when ascending.
+      if (afterNumber !== null) {
+        issues = issues.filter((issue) => (direction === 1 ? issue.number > afterNumber : issue.number < afterNumber));
+      }
       const limit = typeof first === 'number' ? first : issues.length;
       const page = issues.slice(0, limit);
       const hasNextPage = issues.length > limit;
@@ -771,7 +775,7 @@ function resolveMutation(
       ctx.errors.push({ message: 'mergePullRequest: pull request not found' });
       return null;
     }
-    const result = store.mergePull(repo, target.pull);
+    const result = store.mergePull(target.repo, target.pull);
     if ('error' in result) {
       ctx.errors.push({ message: result.error });
       return null;
