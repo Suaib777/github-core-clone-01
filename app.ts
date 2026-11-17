@@ -75,23 +75,18 @@ function readBody(req: IncomingMessage): Promise<Buffer> {
   });
 }
 
-function pathOf(req: IncomingMessage): string {
+function parseUrl(req: IncomingMessage): { path: string; query: URLSearchParams } {
   try {
-    return new URL(req.url ?? '/', 'http://entry').pathname;
+    const url = new URL(req.url ?? '/', 'http://entry');
+    return { path: url.pathname, query: url.searchParams };
   } catch {
-    return '/';
-  }
-}
-
-function queryOf(req: IncomingMessage): URLSearchParams {
-  try {
-    return new URL(req.url ?? '/', 'http://entry').searchParams;
-  } catch {
-    return new URLSearchParams();
+    return { path: '/', query: new URLSearchParams() };
   }
 }
 
 function decodeSegment(segment: string): string {
+  // Most path segments carry no percent-encoding; skip the decode in that case.
+  if (!segment.includes('%')) return segment;
   try {
     return decodeURIComponent(segment);
   } catch {
@@ -103,9 +98,8 @@ export function createApp(): Server {
   const store = new Store();
   return createServer((req: IncomingMessage, res: ServerResponse) => {
     void (async () => {
-      const path = pathOf(req);
+      const { path, query } = parseUrl(req);
       const method = req.method ?? 'GET';
-      const query = queryOf(req);
       const segments = path.split('/').filter((part) => part !== '').map(decodeSegment);
 
       // The env's boot check calls this twice: 200 {"ok":true}. No auth.
