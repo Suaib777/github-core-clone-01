@@ -3,10 +3,11 @@
 // The forge itself is a statically linked Linux amd64 Go binary committed in
 // this repository as vendored source (`forge`, built from the Go sources in
 // `go/` with CGO_ENABLED=0). This file only spawns it, forwards the
-// environment, and propagates its exit code. The binary owns the whole
-// lifecycle: it binds an ephemeral port, registers it with the env, serves git
-// smart HTTP, REST v3, GraphQL and MCP from its own store, waits for /done,
-// then exits 0 — exactly like the TypeScript main.ts it replaces.
+// environment and shutdown signals, and propagates its exit code. The binary
+// owns the whole lifecycle: it binds an ephemeral port, registers it with the
+// env, serves git smart HTTP, REST v3, GraphQL and MCP from its own store,
+// waits for /done, then exits 0 — exactly like the TypeScript main.ts it
+// replaces.
 
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -19,8 +20,14 @@ const child = spawn(binary, [], {
   env: process.env,
 });
 
+// Forward shutdown signals so a trial timeout or interrupt stops the forge
+// server cleanly instead of leaving it orphaned on its port. The child's
+// exit handler below then re-raises the same signal in this process.
+process.on('SIGTERM', () => child.kill('SIGTERM'));
+process.on('SIGINT', () => child.kill('SIGINT'));
+
 child.on('error', (err) => {
-  console.error(`failed to start the forge binary: ${err.message}`);
+  console.error(`failed to start the forge binary (${binary}): ${err.message}`);
   process.exit(1);
 });
 
