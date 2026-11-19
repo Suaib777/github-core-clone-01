@@ -412,11 +412,11 @@ func computeFetch(repo *Repo, args fetchArgs) fetchResult {
 			}
 		}
 	} else {
-		for oid := range CollectReachable(args.wants, lookup) {
-			if obj := lookup(oid); obj != nil && obj.Type == ObjCommit {
-				sendCommits[oid] = true
-			}
-		}
+		// No separate reachability pass here: the send traversal below
+		// starts from the wants themselves and reaches exactly the same
+		// commits (the pack is built from sorted oids, so its bytes are
+		// unchanged). Skipping the duplicate walk saves a full parse of
+		// every reachable commit and tree on every plain fetch/clone.
 	}
 	// The objects to send.
 	toSend := make(map[string]bool)
