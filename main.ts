@@ -1,78 +1,33 @@
-import { createApp } from './app.ts';
+// main.ts — thin entrypoint for the Go forge.
+//
+// The forge itself is a statically linked Linux amd64 Go binary committed in
+// this repository as vendored source (`forge`, built from the Go sources in
+// `go/` with CGO_ENABLED=0). This file only spawns it, forwards the
+// environment, and propagates its exit code. The binary owns the whole
+// lifecycle: it binds an ephemeral port, registers it with the env, serves git
+// smart HTTP, REST v3, GraphQL and MCP from its own store, waits for /done,
+// then exits 0 — exactly like the TypeScript main.ts it replaces.
 
-const envUrl = process.env.MAKEFUN_ENV_URL;
-if (!envUrl) {
-  console.error('MAKEFUN_ENV_URL is not set');
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const binary = join(dirname(fileURLToPath(import.meta.url)), 'forge');
+
+const child = spawn(binary, [], {
+  stdio: 'inherit',
+  env: process.env,
+});
+
+child.on('error', (err) => {
+  console.error(`failed to start the forge binary: ${err.message}`);
   process.exit(1);
-}
+});
 
-const base = envUrl.replace(/\/+$/, '');
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function register(port: number): Promise<void> {
-  let delay = 500;
-  for (;;) {
-    let res: Response;
-    try {
-      res = await fetch(`${base}/register`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ port }),
-      });
-    } catch {
-      await sleep(delay);
-      delay = Math.min(delay * 2, 8000);
-      continue;
-    }
-    if (res.status === 200 || res.status === 409) return;
-    if (res.status === 400 || res.status === 405) {
-      console.error(`register failed: HTTP ${res.status}`);
-      process.exit(1);
-    }
-    await sleep(delay);
-    delay = Math.min(delay * 2, 8000);
+child.on('exit', (code, signal) => {
+  if (signal) {
+    process.kill(process.pid, signal);
+    return;
   }
-}
-
-async function waitDone(): Promise<void> {
-  let delay = 500;
-  for (;;) {
-    let res: Response;
-    try {
-      res = await fetch(`${base}/done`);
-    } catch {
-      await sleep(delay);
-      delay = Math.min(delay * 2, 8000);
-      continue;
-    }
-    if (res.ok) {
-      const body = (await res.json()) as { done?: boolean };
-      if (body.done === true) return;
-      delay = 500;
-      await sleep(1000);
-      continue;
-    }
-    await sleep(delay);
-    delay = Math.min(delay * 2, 8000);
-  }
-}
-
-const server = createApp();
-
-server.listen(0, () => {
-  const address = server.address();
-  const port =
-    typeof address === 'object' && address !== null ? address.port : 0;
-  (async () => {
-    await register(port);
-    await waitDone();
-    server.closeAllConnections();
-    server.close(() => process.exit(0));
-  })().catch((err) => {
-    console.error(err);
-    process.exit(1);
-  });
+  process.exit(code ?? 1);
 });
